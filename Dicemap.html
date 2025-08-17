@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>India Heritage Map — Dicemap </title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <style>
+    :root { --bg:#f7fafc; --card:#ffffff; --ink:#0f172a; --muted:#475569; --accent:#2563eb; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; background:var(--bg); color:var(--ink); }
+    .app { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+    header { display:flex; align-items:center; justify-content: space-between; gap:12px; position: sticky; top:0; padding: 10px 12px; background: rgba(255,255,255,.7); backdrop-filter: blur(8px); border:1px solid #e2e8f0; border-radius: 14px; z-index: 10; }
+    header h1 { font-size: clamp(18px, 2.2vw, 24px); margin:0; }
+    #map { height: 68vh; min-height: 420px; background:#e2e8f0; border-radius: 16px; box-shadow: 0 8px 30px rgba(2,8,23,.06); border:1px solid #e5e7eb; }
+    .layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 1000px) { .layout { grid-template-columns: 2fr 1fr; } }
+
+    .panel { background: var(--card); border:1px solid #e2e8f0; border-radius: 16px; padding: 16px; box-shadow: 0 8px 30px rgba(2,8,23,.06); position: sticky; top: 78px; align-self: start; }
+    .panel .loc { color: var(--muted); font-size: 14px; margin-bottom: 4px; }
+    .panel h2 { margin:6px 0 10px; font-size: 22px; line-height: 1.2; }
+    .panel .emoji { font-size: 24px; margin-right: 6px; }
+    .panel p { color:#334155; text-align: justify; line-height: 1.55; }
+    .hint { color:#475569; font-size: 14px; }
+
+    .controls { display:flex; gap:8px; align-items:center; }
+    button.btn { appearance:none; border:1px solid #d1d5db; background:#111827; color:white; border-radius: 999px; padding: 10px 14px; font-weight: 600; cursor:pointer; box-shadow: 0 2px 8px rgba(2,8,23,.12); }
+    button.btn:hover { filter: brightness(1.05); }
+
+    /* Emoji markers */
+    .emoji-marker { display:grid; place-items:center; }
+    .emoji-marker span { font-size: 22px; line-height: 1; user-select: none; cursor:pointer; text-shadow: 0 1px 2px rgba(0,0,0,.15); }
+
+    /* Pop animation */
+    @keyframes pop { 0% { transform: scale(.85); } 50% { transform: scale(1.25); } 100% { transform: scale(1); } }
+    .emoji-marker.pop span { animation: pop 450ms ease-out; }
+
+    /* Leaflet tooltip style tweak */
+    .leaflet-tooltip { background:#111827; color:#fff; border:none; border-radius: 10px; padding: 6px 8px; box-shadow: 0 4px 16px rgba(2,8,23,.2); }
+    .leaflet-tooltip:before { border-top-color: #111827; }
+
+    /* Lightbox modal */
+    .lightbox { position: fixed; inset: 0; display:none; place-items:center; background: rgba(2,8,23,.6); z-index: 1000; }
+    .lightbox.open { display:grid; }
+    .lb-dialog { width:min(980px, 92vw); max-height: 90vh; background: #fff; border-radius: 18px; overflow: hidden; box-shadow: 0 20px 60px rgba(2,8,23,.35); display:grid; grid-template-rows: auto 1fr auto; }
+    .lb-header { display:flex; align-items:center; justify-content: space-between; padding: 12px 14px; border-bottom:1px solid #e5e7eb; }
+    .lb-title { font-weight: 700; font-size: 18px; display:flex; align-items:center; gap:8px; }
+    .lb-title .emoji { font-size: 22px; }
+    .lb-close { border:none; background:transparent; font-size: 24px; cursor:pointer; padding: 6px 10px; }
+    .lb-body { display:grid; grid-template-columns: 1fr; gap: 0; }
+    .lb-media { background:#0b1020; display:grid; place-items:center; overflow:hidden; }
+    .lb-media img { width:100%; height:auto; max-height: 60vh; object-fit: contain; background:#0b1020; }
+    .lb-text { padding: 14px 16px; color:#334155; line-height:1.6; overflow:auto; max-height: 32vh; }
+
+    .lb-navbtn { position: absolute; top:50%; transform: translateY(-50%); border:none; background: rgba(255,255,255,.92); width:44px; height:44px; border-radius: 12px; box-shadow: 0 8px 24px rgba(2,8,23,.25); font-size: 20px; cursor:pointer; }
+    .lb-prev { left: max(10px, calc((100vw - 980px)/2 - 56px)); }
+    .lb-next { right: max(10px, calc((100vw - 980px)/2 - 56px)); }
+    .lb-navbtn:hover { filter: brightness(1.05); }
+
+    .popup-btn { display:inline-flex; align-items:center; gap:6px; margin-top:8px; background:#111827; color:#fff; border:1px solid #0f172a; padding:6px 10px; border-radius:10px; cursor:pointer; font-weight:600; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>India Heritage Explorer — Emoji Pins + Dice 🎲 + Lightbox</h1>
+      <div class="controls">
+        <button id="rollBtn" class="btn" title="Pick a random site and zoom in">🎲 Roll Dice</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <div id="map"></div>
+      <aside class="panel" id="panel">
+        <div class="loc" id="panelLoc">Pick a pin to explore</div>
+        <h2><span class="emoji" id="panelEmoji">📍</span><span id="panelTitle">All 20 heritage sites are visible</span></h2>
+        <p id="panelBlurb" class="hint">Hover any emoji to see its name. Click to pop and zoom. Use <b>View Details</b> in the popup or press <b>Roll Dice</b> for a random destination and a full‑screen image lightbox with arrows.</p>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Lightbox modal -->
+  <div class="lightbox" id="lightbox" aria-hidden="true">
+    <button class="lb-navbtn lb-prev" id="lbPrev" aria-label="Previous">◀</button>
+    <div class="lb-dialog" role="dialog" aria-modal="true" aria-labelledby="lbTitle">
+      <div class="lb-header">
+        <div class="lb-title"><span class="emoji" id="lbEmoji">🏛️</span><span id="lbTitle">Title</span></div>
+        <button class="lb-close" id="lbClose" aria-label="Close">✕</button>
+      </div>
+      <div class="lb-body">
+        <div class="lb-media"><img id="lbImg" alt="Heritage site image" /></div>
+        <div class="lb-text" id="lbText"></div>
+      </div>
+    </div>
+    <button class="lb-navbtn lb-next" id="lbNext" aria-label="Next">▶</button>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    // ---- Data (20 sites) ----
+    // Note: "wiki" uses Wikipedia page titles. We'll fetch images from REST API when opening the modal.
+    const SITES = [
+      { name: "Taj Mahal", location: "Agra, Uttar Pradesh", lat: 27.1751, lon: 78.0421, emoji: "🏛️", wiki: "Taj_Mahal", img: null,
+        blurb: `The Taj Mahal, completed in 1653 by Mughal emperor Shah Jahan, is a marble mausoleum built in memory of his wife Mumtaz Mahal. Its perfect symmetry, inlaid pietra dura work, and the changing hues of white marble through the day create a breathtaking spectacle. The monument sits on a raised platform beside the Yamuna River, framed by formal Mughal gardens and a reflecting pool that doubles the visual drama. Four minarets tilt slightly outward for safety. Inside, cenotaphs lie beneath an exquisitely carved dome, while the actual tombs rest in a crypt below. Beyond the romantic legend, the Taj showcases masterful engineering—precise geometry, acoustic finesse under the main dome, and an ingenious water system—remaining a timeless symbol of love and Indo‑Islamic art.` },
+      { name: "Qutub Minar", location: "Delhi", lat: 28.5245, lon: 77.1855, emoji: "🗼", wiki: "Qutb_Minar", img: null,
+        blurb: `Qutub Minar is the world’s tallest brick minaret, begun by Qutb‑ud‑din Aibak around 1199 and completed by later Delhi Sultanate rulers. Rising to about 72.5 meters, the fluted tower carries bands of Quranic inscriptions and alternating red sandstone and marble. At its base lies the Quwwat‑ul‑Islam Mosque and the celebrated Iron Pillar, noted for corrosion resistance. The complex marks the consolidation of Indo‑Islamic power in northern India and a dialogue between reused temple materials and new Islamic motifs. The minar’s tapering profile and projecting balconies give elegant rhythm, while surrounding ruins evoke layered history, technology, and craftsmanship from medieval Delhi.` },
+      { name: "Chittorgarh Fort (Hill Forts of Rajasthan)", location: "Chittorgarh, Rajasthan", lat: 24.8887, lon: 74.6269, emoji: "🏯", wiki: "Chittorgarh_Fort", img: null,
+        blurb: `Chittorgarh is the grandest of Rajasthan’s hill forts, a sprawling citadel crowning a rocky plateau above the Berach River. Founded by the Mauryas and later seat of the Sisodia Rajputs, it bears witness to heroic defenses, including the legendary jauhar of Rani Padmini. Seven massive gates lead to palaces, reservoirs, and iconic towers like Vijay Stambh and Kirti Stambh. Jain and Hindu temples coexist within its walls, reflecting a continuous tradition of devotion and artistry. Ingenious stepwells and tanks sustained long sieges, while vantage points command sweeping plains. As part of UNESCO’s Hill Forts of Rajasthan, Chittorgarh exemplifies military architecture adapted to the Aravalli landscape and the ethos of Rajput valor.` },
+      { name: "Rani ki Vav (The Queen’s Stepwell)", location: "Patan, Gujarat", lat: 23.8567, lon: 72.1010, emoji: "🪜", wiki: "Rani_ki_Vav", img: null,
+        blurb: `Rani ki Vav is an 11th‑century stepwell commissioned by Queen Udayamati in memory of King Bhima I of the Solanki dynasty. Descending seven levels with pillared pavilions, it forms an underground gallery of sculpture, with hundreds of exquisitely carved panels depicting deities, apsaras, and mythic scenes. Beyond ornament, the structure is a sophisticated water‑harvesting system designed for Gujarat’s semi‑arid climate. Alignment, geometry, and ventilation ensured cooler temperatures below ground, turning the stepwell into both a devotional space and a summer refuge. Restored after long siltation, it now reveals remarkable craftsmanship in sandstone and the engineering acumen that integrated ritual, art, and hydrology in medieval India.` },
+      { name: "Champaner–Pavagadh Archaeological Park", location: "Panchmahal, Gujarat", lat: 22.4824, lon: 73.5333, emoji: "🏰", wiki: "Champaner-Pavagadh_Archaeological_Park", img: null,
+        blurb: `Champaner–Pavagadh preserves an extraordinary pre‑Mughal Islamic city alongside earlier Hindu and Jain layers, set against the dramatic rise of Pavagadh Hill. The site holds fortifications, palaces, stepwells, and mosques such as the elegant Jami Masjid with carved stone screens and a lofty prayer hall. Urban planning reveals axial streets, water structures, and garden remnants, while the hilltop Kalika Mata temple draws continuous pilgrimage. Offering a cross‑section of Gujarat’s cultural evolution from the 8th to 16th centuries, Champaner provides rare insight into a medieval capital frozen in time, with intact architectural vocabularies and a landscape that ties sacred geography to royal urbanism.` },
+      { name: "Sun Temple, Konark", location: "Konark, Odisha", lat: 19.8876, lon: 86.0945, emoji: "🌞", wiki: "Konark_Sun_Temple", img: null,
+        blurb: `The 13th‑century Sun Temple at Konark was conceived as a colossal chariot for Surya, the sun god, with twelve pairs of intricately carved stone wheels and remnants of prancing horses. Once crowned by a towering shikhara, the complex radiates celestial symbolism—its orientation captures the rising sun over the Bay of Bengal. Sculptures range from sensuous figures and musicians to scenes of daily life, executed with finesse in khondalite stone. Konark also encodes astronomical knowledge, with the wheels often interpreted as sundials. Despite partial ruin, the surviving assembly hall and carvings project the ambition of the Eastern Ganga dynasty and the mastery of Odisha’s temple builders.` },
+      { name: "Group of Monuments at Hampi", location: "Hampi, Karnataka", lat: 15.3350, lon: 76.4600, emoji: "🪨", wiki: "Hampi", img: null,
+        blurb: `Hampi, former capital of the Vijayanagara Empire, sprawls across a surreal boulder‑strewn landscape along the Tungabhadra River. Royal enclosures, market streets, and temples—most famously Virupaksha and Vittala—reflect a sophisticated urban civilization that flourished in the 14th–16th centuries. Intricate stonework, pillared mandapas that resonate with musical notes, and the iconic stone chariot display technical virtuosity. Water channels, tanks, and aqueducts show advanced hydraulics, while the city’s grid responds to sacred topography and defense. Even in ruin, Hampi’s scale and setting convey imperial grandeur, making it one of India’s most immersive archaeological experiences.` },
+      { name: "Group of Monuments at Pattadakal", location: "Bagalkote, Karnataka", lat: 15.9443, lon: 75.8156, emoji: "🛕", wiki: "Pattadakal", img: null,
+        blurb: `Pattadakal is a Chalukyan masterpiece where northern Nagara and southern Dravida temple styles meet and mingle. Dating to the 7th–8th centuries, its cluster includes the Virupaksha, Mallikarjuna, and Papanatha temples, each with sculptural panels from the epics and refined architectural detailing. Royal sponsorship of temple building here celebrated coronations and imperial legitimacy, while artisans experimented with hybrid forms that influenced temple design across the Deccan. The site illustrates a creative crossroads, with sandstone carving of remarkable delicacy, rhythmic pillar orders, and narrative friezes that bring mythic scenes to life.` },
+      { name: "Mahabalipuram (Group of Monuments)", location: "Mahabalipuram, Tamil Nadu", lat: 12.6208, lon: 80.1920, emoji: "🪷", wiki: "Group_of_Monuments_at_Mahabalipuram", img: null,
+        blurb: `Mahabalipuram (Mamallapuram) on the Coromandel Coast is famed for rock‑cut architecture and free‑standing rathas carved from single granite outcrops. Commissioned by the Pallavas in the 7th–8th centuries, the site includes the Shore Temple, the great bas‑relief Descent of the Ganges/Arjuna’s Penance, and cave sanctuaries with dynamic panels. The complex shows mastery in translating wooden prototypes into stone, hints at maritime trade links, and celebrates motion and narrative. Sea spray, wind, and time have softened edges, yet the artistry still feels fresh and experimental, bridging nature and monument along India’s east coast.` },
+      { name: "Brihadisvara Temple (Great Living Chola Temples)", location: "Thanjavur, Tamil Nadu", lat: 10.7828, lon: 79.1310, emoji: "🏛️", wiki: "Brihadisvara_Temple,_Thanjavur", img: null,
+        blurb: `Brihadisvara, built by Rajaraja I in the 11th century, is the crown jewel of the Chola dynasty’s living temples. Its soaring vimana, precise axial layout, and granite construction exemplify Dravidian ambition. The sanctum houses a massive lingam, while corridors bear murals and inscriptions documenting donations and temple administration. Along with Gangaikonda Cholapuram and Darasuram, it reflects a living tradition where ritual continues in a historic monument. Engineering feats—like the monolithic capstone raised via earthen ramps—showcase logistical genius. The temple’s scale and serenity convey cosmic order rendered in stone.` },
+      { name: "Ajanta Caves", location: "Aurangabad, Maharashtra", lat: 20.5519, lon: 75.7033, emoji: "🖼️", wiki: "Ajanta_Caves", img: null,
+        blurb: `Carved in a horseshoe bend of the Waghora River gorge, the Ajanta Caves contain exquisite Buddhist murals and sculptures from the 2nd century BCE to the 6th century CE. Monastic viharas and chaitya halls unfold along the cliff, their interiors glowing with paintings that narrate Jataka tales, courtly scenes, and devotional imagery. Mastery of line, color, and composition gives figures grace and psychological depth, while stone carving achieves delicate filigree. Ajanta marks a high point of classical Indian painting and monastic architecture, reflecting networks of trade, patronage, and faith that linked the Deccan to wider Buddhist worlds.` },
+      { name: "Ellora Caves", location: "Aurangabad, Maharashtra", lat: 20.0268, lon: 75.1791, emoji: "⛏️", wiki: "Ellora_Caves", img: null,
+        blurb: `Ellora’s 34 rock‑cut monuments present Hindu, Buddhist, and Jain traditions side by side, created between the 6th and 10th centuries. The unparalleled Kailasa Temple (Cave 16) was hewn top‑down from a single rock mass, forming a free‑standing temple alive with carved elephants, narrative panels, and soaring towers. Buddhist vihara complexes exhibit multi‑storied planning, while Jain caves feature refined ornamentation and serene tirthankara images. Ellora celebrates artistic pluralism and technical audacity, revealing how excavation, negative sculpting, and architectural imagination could coax entire worlds from living rock.` },
+      { name: "Elephanta Caves", location: "Mumbai Harbor, Maharashtra", lat: 18.9633, lon: 72.9311, emoji: "🐘", wiki: "Elephanta_Caves", img: null,
+        blurb: `On an island in Mumbai’s harbor, the Elephanta Caves house monumental Shaiva sculptures, most famously the three‑headed Maheshmurti—Shiva as creator, preserver, and destroyer. The main cave’s pillared hall frames dynamic reliefs of mythic episodes like the marriage of Shiva and Parvati and the defeat of Andhaka. Carved between the 5th and 8th centuries, the caves reflect maritime trade wealth and regional devotional currents. Despite damage over time, the surviving reliefs retain powerful presence and subtle modeling, turning the basalt interiors into sanctuaries of light and shadow.` },
+      { name: "Buddhist Monuments at Sanchi", location: "Raisen, Madhya Pradesh", lat: 23.4853, lon: 77.7393, emoji: "☸️", wiki: "Sanchi", img: null,
+        blurb: `Sanchi’s stupa complex, initiated by Emperor Ashoka in the 3rd century BCE, offers the most complete panorama of early Buddhist architecture in India. The Great Stupa’s four toranas are carved with lively scenes that interpret the Buddha’s life and teachings through symbols rather than figural images. Monasteries, smaller stupas, and votive shrines cluster on the hill, illustrating ritual pathways and community life across centuries. The site is a textbook of stone construction, narrative relief, and the evolution of Buddhist art from aniconism to more representational forms in later additions.` },
+      { name: "Khajuraho Group of Monuments", location: "Chhatarpur, Madhya Pradesh", lat: 24.8318, lon: 79.9199, emoji: "💃", wiki: "Khajuraho_Group_of_Monuments", img: null,
+        blurb: `Khajuraho’s medieval temples, built by the Chandela rulers, are celebrated for harmonious proportions and astonishing sculptures. The Western Group, including Kandariya Mahadev, displays curvilinear shikharas that ripple like mountains. Narrative and ornamental friezes depict deities, musicians, courtly life, and famed erotic imagery exploring kama within a broader cosmic order. Carved in fine sandstone, the figures are animated and sensuous, while the plans reveal sophisticated geometry and spatial rhythm. Khajuraho stands as a testament to artistic freedom, ritual practice, and the layered aesthetics of medieval central India.` },
+      { name: "Rock Shelters of Bhimbetka", location: "Raisen, Madhya Pradesh", lat: 22.9407, lon: 77.6143, emoji: "🖍️", wiki: "Bhimbetka_rock_shelters", img: null,
+        blurb: `Bhimbetka’s sandstone shelters preserve a rare continuum of rock art spanning prehistoric eras. Painted in mineral pigments, the scenes portray hunters, dancers, animals, and daily activities, revealing shifts in tools, fauna, and social life over millennia. The natural amphitheater of eroded rock forms a labyrinth of overhangs and caverns that provided habitation and ritual spaces. Archaeological layers show continuous human presence, while the art itself is a living archive of India’s earliest visual culture—like leafing through a deep‑time picture book etched onto stone.` },
+      { name: "Kaziranga National Park", location: "Assam", lat: 26.5775, lon: 93.1711, emoji: "🦏", wiki: "Kaziranga_National_Park", img: null,
+        blurb: `Kaziranga’s floodplain grasslands, wetlands, and forests support the world’s largest population of the one‑horned rhinoceros, alongside tigers, elephants, and a spectacular array of birds. Shaped by the Brahmaputra’s dynamic river system, the park’s ecology depends on seasonal flooding that renews soils and habitats. Anti‑poaching efforts and community engagement have been central to conservation gains. Visitors encounter sweeping vistas of elephant grass, shimmering beels (lakes), and distant Karbi hills. Kaziranga exemplifies the conservation value of intact riverine landscapes and the resilience of species when protected at scale.` },
+      { name: "Sundarbans National Park", location: "West Bengal", lat: 21.9497, lon: 88.8308, emoji: "🌿", wiki: "Sundarbans_National_Park", img: null,
+        blurb: `The Sundarbans is the world’s largest mangrove forest, where land and sea interlace in a maze of tidal creeks, mudflats, and islands. Home to the Royal Bengal Tiger adapted to a watery realm, the park also shelters crocodiles, otters, and diverse birdlife. Mangroves buffer cyclones, store carbon, and sustain fishing communities, tying conservation to livelihoods. Salinity gradients and tidal rhythms shape a unique ecology, while honey collectors and boat routes reflect traditional knowledge. The Sundarbans’ beauty is austere and elemental—green canopies under vast skies and shifting light.` },
+      { name: "Nanda Devi & Valley of Flowers National Parks", location: "Uttarakhand", lat: 30.5410, lon: 79.5859, emoji: "🏔️", wiki: "Nanda_Devi_and_Valley_of_Flowers_National_Parks", img: null,
+        blurb: `This twin UNESCO site unites the high alpine wilderness of the Nanda Devi Biosphere Reserve with the vibrant meadows of the Valley of Flowers. Towering peaks, glaciers, and deep gorges frame habitats for snow leopards, Himalayan musk deer, and rare alpine flora. In summer, the valley erupts into a mosaic of blossoms fed by glacial streams, while Nanda Devi’s inner sanctuary remains a formidable bastion of rock and ice. The site showcases altitudinal zonation, traditional transhumance routes, and the fragile grandeur of the Greater Himalaya’s protected core.` },
+      { name: "Churches and Convents of Goa", location: "Old Goa, Goa", lat: 15.4989, lon: 73.8278, emoji: "⛪", wiki: "Churches_and_convents_of_Goa", img: null,
+        blurb: `The ecclesiastical complex of Old Goa reflects the Portuguese Estado da Índia at its zenith. Basilicas, cathedrals, and convents—most notably the Basilica of Bom Jesus and Sé Cathedral—blend Manueline, Mannerist, and Baroque idioms in laterite and lime plaster. Interiors feature gilded altars, carved retables, and devotional art linking Goa with networks across Europe, Africa, and Asia. The urban layout around church squares hints at a once‑cosmopolitan port city. Today, bells, vaults, and whitewashed façades narrate a unique chapter of coastal India’s global entanglements and sacred heritage.` }
+    ];
+
+    // ---- Map ----
+    const map = L.map('map', { minZoom: 4, maxZoom: 10 }).setView([22.6, 79], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+
+    // ---- UI refs ----
+    const panelLoc = document.getElementById('panelLoc');
+    const panelTitle = document.getElementById('panelTitle');
+    const panelEmoji = document.getElementById('panelEmoji');
+    const panelBlurb = document.getElementById('panelBlurb');
+
+    // Lightbox refs
+    const lightbox = document.getElementById('lightbox');
+    const lbTitle = document.getElementById('lbTitle');
+    const lbEmoji = document.getElementById('lbEmoji');
+    const lbImg = document.getElementById('lbImg');
+    const lbText = document.getElementById('lbText');
+    const lbClose = document.getElementById('lbClose');
+    const lbPrev = document.getElementById('lbPrev');
+    const lbNext = document.getElementById('lbNext');
+
+    let currentIndex = 0;
+
+    function updatePanel(site){
+      panelLoc.textContent = site.location;
+      panelTitle.textContent = site.name;
+      panelEmoji.textContent = site.emoji;
+      panelBlurb.textContent = site.blurb;
+    }
+
+    const markers = [];
+    function makeIcon(emoji){
+      return L.divIcon({ className: 'emoji-marker', html: `<span>${emoji}</span>`, iconSize: [24,24], iconAnchor: [12,12] });
+    }
+
+    function popMarker(marker){
+      const el = marker.getElement();
+      if(!el) return;
+      el.classList.remove('pop');
+      void el.offsetWidth;
+      el.classList.add('pop');
+    }
+
+    function wikipediaImageUrl(title){
+      const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
+      return fetch(url).then(r => r.ok ? r.json() : null).then(data => {
+        if (!data) return null;
+        // Prefer originalimage, fall back to thumbnail
+        if (data.originalimage && data.originalimage.source) return data.originalimage.source;
+        if (data.thumbnail && data.thumbnail.source) return data.thumbnail.source;
+        return null;
+      }).catch(() => null);
+    }
+
+    async function ensureImage(site){
+      if (site.img) return site.img;
+      const url = await wikipediaImageUrl(site.wiki);
+      site.img = url || 'https://upload.wikimedia.org/wikipedia/commons/6/65/No-Image-Placeholder.svg';
+      return site.img;
+    }
+
+    async function openModal(index){
+      currentIndex = (index + SITES.length) % SITES.length;
+      const site = SITES[currentIndex];
+      lbTitle.textContent = site.name;
+      lbEmoji.textContent = site.emoji;
+      lbText.textContent = site.blurb;
+      lbImg.src = '';
+      lightbox.classList.add('open');
+      lightbox.setAttribute('aria-hidden','false');
+      // Fetch image (if needed)
+      const src = await ensureImage(site);
+      lbImg.src = src;
+    }
+
+    function closeModal(){
+      lightbox.classList.remove('open');
+      lightbox.setAttribute('aria-hidden','true');
+    }
+
+    function nextModal(){ openModal(currentIndex + 1); }
+    function prevModal(){ openModal(currentIndex - 1); }
+
+    // Close on backdrop click
+    lightbox.addEventListener('click', (e) => {
+      if (e.target === lightbox) closeModal();
+    });
+    lbClose.addEventListener('click', closeModal);
+    lbNext.addEventListener('click', nextModal);
+    lbPrev.addEventListener('click', prevModal);
+    document.addEventListener('keydown', (e) => {
+      if (!lightbox.classList.contains('open')) return;
+      if (e.key === 'Escape') closeModal();
+      if (e.key === 'ArrowRight') nextModal();
+      if (e.key === 'ArrowLeft') prevModal();
+    });
+
+    function selectSite(site){
+      updatePanel(site);
+      map.flyTo([site.lat, site.lon], 6.5, { duration: 1.1 });
+      const m = markers.find(mk => mk.site === site);
+      if(m) popMarker(m);
+    }
+
+    // Add markers (always visible) with popup including a View Details button
+    SITES.forEach((site, i) => {
+      const marker = L.marker([site.lat, site.lon], { icon: makeIcon(site.emoji), title: `${site.name} — ${site.location}` }).addTo(map);
+      marker.site = site; markers.push(marker);
+      marker.bindTooltip(`${site.name} — ${site.location}`, { direction: 'top', offset:[0,-8] });
+      const popupHtml = `
+        <div style="min-width:200px;max-width:240px;">
+          <div style="font-weight:700;margin-bottom:6px;">${site.emoji} ${site.name}</div>
+          <button class="popup-btn" onclick="openSiteModal(${i})">🖼️ View Details</button>
+        </div>`;
+      marker.bindPopup(popupHtml);
+      marker.on('click', () => selectSite(site));
+    });
+
+    // Expose modal opener for popup buttons
+    window.openSiteModal = (i) => { openModal(i); };
+
+    // Dice button
+    document.getElementById('rollBtn').addEventListener('click', async () => {
+      const idx = Math.floor(Math.random()*SITES.length);
+      const site = SITES[idx];
+      selectSite(site);
+      // also open lightbox
+      openModal(idx);
+    });
+  </script>
+</body>
+</html>

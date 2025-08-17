@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Heritage Quiz — Video, Timer & Certificate</title>
+
+<!-- jsPDF + html2canvas (for PDF certificate) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<style>
+  :root{
+    --bg:#080909;
+    --card:#0f1316;
+    --accent:#f5ba42;
+    --muted:#bfc4c9;
+    --glass: rgba(255,255,255,0.03);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:Inter, system-ui, Arial, sans-serif;
+    background:
+      radial-gradient(circle at 10% 10%, rgba(245,186,66,0.04), transparent 10%),
+      linear-gradient(180deg,#050506 0%, #0b0d0f 100%);
+    color:#fff;
+    padding:28px;
+    text-align:center;
+  }
+  h1{margin:6px 0 0;font-size:28px;color:var(--accent)}
+  p.lead{color:var(--muted);margin-top:6px;margin-bottom:18px}
+  .container{max-width:980px;margin:18px auto;padding:18px}
+  .card{background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.01));border-radius:12px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,0.6);margin-bottom:18px}
+  .form-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  input{background:var(--glass);border:1px solid rgba(255,255,255,0.04);color:#fff;padding:10px 12px;border-radius:8px;min-width:200px}
+  .btn{background:var(--accent);color:#000;font-weight:700;border:none;padding:10px 16px;border-radius:10px;cursor:pointer;margin-top:10px}
+  .btn.secondary{background:transparent;color:var(--accent);border:1px solid rgba(245,186,66,0.12)}
+  .categories{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+  .cat{width:260px;padding:18px;cursor:pointer;border-radius:12px;border:1px solid rgba(255,255,255,0.03);transition:transform .15s,box-shadow .15s;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00))}
+  .cat:hover{transform:translateY(-6px);box-shadow:0 10px 30px rgba(0,0,0,0.6)}
+  .cat h3{margin:0;color:var(--accent)}.cat p{color:var(--muted);margin-top:8px}
+
+  #video-area{display:none;margin-top:16px}
+  iframe{width:100%;max-width:820px;height:440px;border-radius:10px;border:0;margin:12px auto;display:block}
+
+  #quiz-area{display:none;margin-top:18px}
+  .question-box{background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.01));padding:18px;border-radius:10px;max-width:820px;margin:auto;text-align:left;border:1px solid rgba(255,255,255,0.02)}
+  .qnum{color:var(--muted);font-size:13px;margin-bottom:6px}
+  .qtxt{font-size:18px;margin:6px 0 12px}
+  .options{display:flex;flex-direction:column;gap:10px}
+  .opt{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:12px;border-radius:8px;color:#fff;cursor:pointer;text-align:left;transition:all .12s}
+  .opt:hover{transform:translateY(-3px);background:rgba(255,255,255,0.02)}
+  .opt.selected{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
+  .progress{color:var(--muted);margin-top:10px;text-align:center}
+  .controls{display:flex;gap:10px;justify-content:center;margin-top:14px}
+
+  .timer{display:inline-block;padding:8px 12px;border-radius:8px;background:linear-gradient(90deg, rgba(245,186,66,0.12), rgba(245,186,66,0.06));color:var(--accent);font-weight:700;margin-top:12px;border:1px solid rgba(245,186,66,0.12)}
+
+  #certificate-wrap{display:none;margin-top:20px}
+  /* fancy certificate styling (scroll / parchment look) */
+  .certificate{
+    width:900px;max-width:95%;margin:auto;background:
+      linear-gradient(180deg,#fffaf0,#fff8ec);
+    border-radius:12px;padding:34px;border:8px solid rgba(245,186,66,0.18);position:relative;overflow:hidden;color:#111;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.6);
+    font-family: "Georgia", serif;
+  }
+  .certificate .header {
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .certificate .title{
+    font-size:34px;color:#b36b00;margin:8px 0 4px;font-weight:800;
+    letter-spacing:1px;text-shadow:0 1px 0 rgba(255,255,255,0.5)
+  }
+  .certificate .sub{color:#6b4f20;margin-bottom:14px}
+  .seal{
+    width:110px;height:110px;border-radius:50%;background:radial-gradient(circle at 30% 30%, #ffd27a,#f2a900);display:flex;align-items:center;justify-content:center;font-weight:900;color:#4b2b00;border:4px solid #fff7e6;box-shadow:0 8px 20px rgba(0,0,0,0.25)
+  }
+  .cert-body{margin-top:18px;font-size:18px;color:#3b2b14}
+  .cert-name{font-size:26px;margin-top:8px;color:#2b1700;font-weight:800}
+  .cert-meta{color:#5b4630;margin-top:10px;font-style:italic}
+  .cert-score{margin-top:12px;font-weight:700;color:#3b2b14}
+  .cert-rank{display:inline-block;margin-top:10px;padding:8px 14px;background:#2b1700;color:#fff;border-radius:8px;font-weight:800}
+
+  .cert-footer{margin-top:20px;color:#6b4f20;font-size:13px}
+  .download-row{display:flex;gap:12px;justify-content:center;margin-top:12px}
+
+  @media (max-width:920px){
+    iframe{height:260px}
+    .certificate{padding:18px}
+    .seal{width:86px;height:86px}
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Heritage Quiz</h1>
+    <p class="lead">Enter your details, pick a category, watch the short video, answer the questions (35s each) and download a decorative certificate.</p>
+
+    <!-- start card -->
+    <div id="start-card" class="card">
+      <div style="max-width:820px;margin:auto;text-align:left">
+        <div style="color:var(--muted);margin-bottom:8px">Student details</div>
+        <div class="form-row">
+          <input id="studentName" placeholder="Full name (e.g. Rahul Kumar)" />
+          <input id="studentClass" placeholder="Class (e.g. 8th)" />
+          <input id="studentSchool" placeholder="School (e.g. ABC School)" />
+        </div>
+
+        <div style="text-align:left;margin-top:14px;color:var(--muted)">Choose a quiz category</div>
+        <div class="categories" id="categories">
+          <div class="cat" onclick="selectCategory('history')">
+            <h3>History</h3>
+            <p>Major events and leaders of India’s past.</p>
+          </div>
+          <div class="cat" onclick="selectCategory('freedom')">
+            <h3>Freedom Fighters</h3>
+            <p>Heroes who fought for India's independence.</p>
+          </div>
+          <div class="cat" onclick="selectCategory('culture')">
+            <h3>Culture</h3>
+            <p>Festivals, arts and traditions across India.</p>
+          </div>
+        </div>
+
+        <div style="margin-top:14px">
+          <button class="btn" onclick="resetAll()">Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- video area -->
+    <div id="video-area" class="card" style="display:none;">
+      <div style="max-width:820px;margin:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="text-align:left">
+            <div style="color:var(--muted);font-size:13px">Watch the recommended video</div>
+            <div id="selected-category-title" style="font-weight:700;margin-top:6px"></div>
+          </div>
+          <div>
+            <button class="btn secondary" onclick="backToStart()">Change Category</button>
+          </div>
+        </div>
+
+        <iframe id="category-video" src="" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+        <div style="text-align:center;margin-top:8px">
+          <button id="start-quiz-btn" class="btn" onclick="beginQuiz()">Start Quiz</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- quiz area -->
+    <div id="quiz-area" style="display:none">
+      <div class="question-box">
+        <div class="qnum" id="qnum">Question</div>
+        <div class="qtxt" id="qtxt">Question text</div>
+
+        <div id="options" class="options"></div>
+
+        <div style="display:flex;justify-content:center;gap:12px;align-items:center;margin-top:14px">
+          <div class="timer" id="timerDisplay">35s</div>
+          <div class="controls">
+            <!-- PREVIOUS REMOVED as requested -->
+            <button class="btn" onclick="nextQ()">Next</button>
+          </div>
+        </div>
+
+        <div class="progress" id="progress">Progress</div>
+      </div>
+    </div>
+
+    <!-- certificate area -->
+    <div id="certificate-wrap" class="card" style="display:none">
+      <div style="max-width:920px;margin:auto">
+        <div id="certificate" class="certificate" aria-hidden="false">
+          <div class="header">
+            <div>
+              <div class="title">Certificate of Achievement</div>
+              <div class="sub">Presented to</div>
+            </div>
+            <div class="seal" id="cert-seal">🏅</div>
+          </div>
+
+          <div class="cert-body" style="text-align:center">
+            <div class="cert-name" id="cert-student"></div>
+            <div class="cert-meta" id="cert-meta"></div>
+            <div class="cert-score" id="cert-score"></div>
+            <div class="cert-rank" id="cert-rank"></div>
+            <div class="cert-footer" id="cert-date" style="margin-top:18px"></div>
+          </div>
+        </div>
+
+        <div class="download-row">
+          <button class="btn" onclick="downloadCertificate()">Download Certificate (PDF)</button>
+          <button class="btn secondary" onclick="restart()">Take Another Quiz</button>
+        </div>
+      </div>
+    </div>
+
+    <footer style="margin-top:28px;color:var(--muted);font-size:13px">Good luck! 🌟</footer>
+  </div>
+
+<script>
+/* ---------- Questions + videos (unchanged questions — 10 per category) ---------- */
+const quizData = {
+  history: {
+    videoId: "ofgIDZHTjTQ",
+    questions: [
+      {q: "Who was the first Prime Minister of India?", a: "Jawaharlal Nehru"},
+      {q: "In which year did India gain independence?", a: "1947"},
+      {q: "Who was known as the Iron Man of India?", a: "Sardar Vallabhbhai Patel"},
+      {q: "Which empire built the Taj Mahal?", a: "Mughal"},
+      {q: "Who was the founder of the Maurya Empire?", a: "Chandragupta Maurya"},
+      {q: "Which war was fought between India and Pakistan in 1971?", a: "Indo-Pak War"},
+      {q: "Who was the first President of India?", a: "Rajendra Prasad"},
+      {q: "Which movement was started by Mahatma Gandhi in 1942?", a: "Quit India Movement"},
+      {q: "Who wrote the Indian National Anthem?", a: "Rabindranath Tagore"},
+      {q: "Which Mughal ruler built Red Fort?", a: "Shah Jahan"}
+    ]
+  },
+  freedom: {
+    videoId: "AHCGkBx1mLA",
+    questions: [
+      {q: "Who is known as the Father of the Nation?", a: "Mahatma Gandhi"},
+      {q: "Who led the 1857 Revolt in Jhansi?", a: "Rani Lakshmibai"},
+      {q: "Who was called Netaji?", a: "Subhas Chandra Bose"},
+      {q: "Which freedom fighter threw a bomb in the Central Legislative Assembly?", a: "Bhagat Singh"},
+      {q: "Who assassinated General Dyer?", a: "Udham Singh"},
+      {q: "Who wrote 'India Wins Freedom'?", a: "Abul Kalam Azad"},
+      {q: "Who was known as the Nightingale of India?", a: "Sarojini Naidu"},
+      {q: "Who was the first woman president of the Indian National Congress?", a: "Annie Besant"},
+      {q: "Which leader gave the slogan 'Do or Die'?", a: "Mahatma Gandhi"},
+      {q: "Who founded the Hindustan Socialist Republican Association?", a: "Chandrasekhar Azad"}
+    ]
+  },
+  culture: {
+    videoId: "zR_L83UamTs",
+    questions: [
+      {q: "Which festival is known as the Festival of Lights in India?", a: "Diwali"},
+      {q: "Which dance form is native to Kerala?", a: "Kathakali"},
+      {q: "Which musical instrument is associated with Lord Krishna?", a: "Flute"},
+      {q: "Which Indian state is famous for Bihu festival?", a: "Assam"},
+      {q: "Which classical dance form originated in Tamil Nadu?", a: "Bharatanatyam"},
+      {q: "Which city is famous for Durga Puja celebrations?", a: "Kolkata"},
+      {q: "Which art form is Madhubani painting from?", a: "Bihar"},
+      {q: "Which is the national flower of India?", a: "Lotus"},
+      {q: "Which festival marks the harvest season in Punjab?", a: "Baisakhi"},
+      {q: "Which festival celebrates the brother-sister bond?", a: "Raksha Bandhan"}
+    ]
+  }
+};
+
+/* ---------- State ---------- */
+let student = { name: "", class: "", school: "" };
+let selectedCategory = null;
+let questions = []; // {q,a,options}
+let currentIdx = 0;
+let answersSelected = []; // store index or null
+let score = 0;
+let timer = null;
+const QUESTION_TIME = 35; // seconds
+let timeLeft = QUESTION_TIME;
+
+/* ---------- Helpers ---------- */
+function shuffle(a){ return a.sort(()=>0.5-Math.random()); }
+
+/* Build relevant options by using other answers in same category and across categories */
+function buildOptionsForQuestion(catQuestions, correct){
+  let pool = [];
+  Object.keys(quizData).forEach(k=>{
+    quizData[k].questions.forEach(q=>{ if(q.a !== correct) pool.push(q.a); });
+  });
+  pool = pool.filter(x=>x && x !== correct);
+  pool = [...new Set(pool)]; // unique
+  pool = shuffle(pool);
+  let chosen = pool.slice(0,3);
+  // if chosen less than 3, fill with fallback reasonable values
+  if(chosen.length < 3){
+    const fallbacks = ["None of the above","Various","Multiple","Not sure","Unknown"];
+    for(let f of fallbacks){
+      if(chosen.length>=3) break;
+      if(f !== correct && !chosen.includes(f)) chosen.push(f);
+    }
+  }
+  const opts = shuffle([correct, ...chosen.slice(0,3)]);
+  return opts;
+}
+
+/* ---------- UI Flow ---------- */
+
+function selectCategory(cat){
+  // validate student details
+  const nm = document.getElementById('studentName').value.trim();
+  const cl = document.getElementById('studentClass').value.trim();
+  const sch = document.getElementById('studentSchool').value.trim();
+  if(!nm || !cl || !sch){ alert('Please fill Name, Class and School first.'); return; }
+  student = { name: nm, class: cl, school: sch };
+
+  selectedCategory = cat;
+  document.getElementById('start-card').style.display = 'none';
+  document.getElementById('video-area').style.display = 'block';
+  document.getElementById('selected-category-title').innerText = cat[0].toUpperCase()+cat.slice(1);
+  const vid = quizData[cat].videoId;
+  document.getElementById('category-video').src = `https://www.youtube.com/embed/${vid}?rel=0&modestbranding=1`;
+}
+
+function backToStart(){
+  document.getElementById('category-video').src = '';
+  document.getElementById('video-area').style.display = 'none';
+  document.getElementById('start-card').style.display = 'block';
+  selectedCategory = null;
+}
+
+/* begin quiz: build MCQ options and show first question */
+function beginQuiz(){
+  const raw = quizData[selectedCategory].questions;
+  questions = raw.map(q=>{
+    const options = buildOptionsForQuestion(raw, q.a);
+    return { q: q.q, a: q.a, options };
+  });
+  // keep given order (user wanted same questions)
+  currentIdx = 0;
+  answersSelected = Array(questions.length).fill(null);
+  score = 0;
+
+  document.getElementById('video-area').style.display = 'none';
+  document.getElementById('certificate-wrap').style.display = 'none';
+  document.getElementById('quiz-area').style.display = 'block';
+  startTimer();
+  renderQuestion();
+}
+
+/* render current question */
+function renderQuestion(){
+  const q = questions[currentIdx];
+  document.getElementById('qnum').innerText = `Question ${currentIdx+1} / ${questions.length}`;
+  document.getElementById('qtxt').innerText = q.q;
+  const optionsDiv = document.getElementById('options');
+  optionsDiv.innerHTML = '';
+  q.options.forEach((opt, idx)=>{
+    const btn = document.createElement('button');
+    btn.className = 'opt';
+    btn.innerText = opt;
+    btn.onclick = ()=> selectOption(idx);
+    optionsDiv.appendChild(btn);
+  });
+  // reflect previous selection
+  if(answersSelected[currentIdx] !== null){
+    const chosen = answersSelected[currentIdx];
+    const btns = optionsDiv.querySelectorAll('.opt');
+    if(btns[chosen]) btns[chosen].classList.add('selected');
+  }
+  document.getElementById('progress').innerText = `Name: ${student.name} • Class: ${student.class} • School: ${student.school}`;
+}
+
+/* selection handler: record and advance after small highlight */
+function selectOption(idx){
+  answersSelected[currentIdx] = idx;
+  // visually mark selection
+  const btns = document.getElementById('options').querySelectorAll('.opt');
+  btns.forEach(b=>b.classList.remove('selected'));
+  if(btns[idx]) btns[idx].classList.add('selected');
+
+  // stop and reset timer
+  stopTimer();
+
+  // short pause so user sees highlight, then move next or end
+  setTimeout(()=>{
+    if(currentIdx < questions.length -1){
+      currentIdx++;
+      renderQuestion();
+      resetTimer();
+      startTimer();
+    } else {
+      finishQuiz();
+    }
+  }, 400);
+}
+
+/* timer functions */
+function startTimer(){
+  timeLeft = QUESTION_TIME;
+  document.getElementById('timerDisplay').innerText = `${timeLeft}s`;
+  stopTimer();
+  timer = setInterval(()=>{
+    timeLeft--;
+    document.getElementById('timerDisplay').innerText = `${timeLeft}s`;
+    if(timeLeft <= 0){
+      // mark skipped (null remains) and move on
+      stopTimer();
+      if(currentIdx < questions.length -1){
+        currentIdx++;
+        renderQuestion();
+        resetTimer();
+        startTimer();
+      } else {
+        finishQuiz();
+      }
+    }
+  },1000);
+}
+function stopTimer(){ if(timer) { clearInterval(timer); timer = null; } }
+function resetTimer(){ stopTimer(); timeLeft = QUESTION_TIME; document.getElementById('timerDisplay').innerText = `${timeLeft}s`; }
+
+/* navigation */
+function nextQ(){
+  // if user hasn't selected, warn
+  if(answersSelected[currentIdx] === null){
+    if(!confirm('You have not selected an option. Continue to the next question?')) return;
+  }
+  stopTimer();
+  if(currentIdx < questions.length -1){
+    currentIdx++;
+    renderQuestion();
+    resetTimer();
+    startTimer();
+  } else {
+    finishQuiz();
+  }
+}
+
+/* finish quiz -> certificate */
+function finishQuiz(){
+  stopTimer();
+  // compute score
+  score = 0;
+  questions.forEach((q, idx)=>{
+    const sel = answersSelected[idx];
+    if(sel !== null && q.options[sel] === q.a) score++;
+  });
+
+  let rank = '';
+  if(score <= 3) rank = 'CAN DO BETTER';
+  else if(score <= 7) rank = 'GOOD JOB';
+  else rank = 'EXCELLENT';
+
+  document.getElementById('quiz-area').style.display = 'none';
+  document.getElementById('certificate-wrap').style.display = 'block';
+  document.getElementById('cert-student').innerHTML = `<strong>${student.name}</strong>`;
+  document.getElementById('cert-meta').innerText = `${student.class} • ${student.school}`;
+  document.getElementById('cert-text').innerText = `Has successfully completed the ${selectedCategory.toUpperCase()} quiz.`;
+  document.getElementById('cert-score').innerText = `Score: ${score} / ${questions.length}`;
+  document.getElementById('cert-rank').innerText = rank;
+  document.getElementById('cert-date').innerText = `Awarded on ${ (new Date()).toLocaleDateString() }`;
+}
+
+/* PDF export */
+async function downloadCertificate(){
+  const certEl = document.getElementById('certificate');
+  // ensure visible (it is)
+  const canvas = await html2canvas(certEl, { scale: 2, backgroundColor: '#fffaf0' });
+  const imgData = canvas.toDataURL('image/png');
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({
+    orientation: 'landscape',
+    unit: 'px',
+    format: [canvas.width, canvas.height]
+  });
+  pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+  const safeName = (student.name || 'certificate').replace(/\s+/g,'_');
+  pdf.save(`${safeName}_certificate.pdf`);
+}
+
+/* reset/restart */
+function resetAll(){ document.getElementById('studentName').value=''; document.getElementById('studentClass').value=''; document.getElementById('studentSchool').value=''; }
+function restart(){
+  // clear video
+  document.getElementById('category-video').src = '';
+  // hide areas
+  document.getElementById('certificate-wrap').style.display = 'none';
+  document.getElementById('start-card').style.display = 'block';
+  document.getElementById('video-area').style.display = 'none';
+  document.getElementById('quiz-area').style.display = 'none';
+  selectedCategory = null; questions = []; answersSelected = []; score = 0;
+  stopTimer();
+}
+</script>
+</body>
+</html>
